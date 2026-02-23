@@ -134,6 +134,14 @@ export class SbsScraperService implements OnModuleDestroy {
         page.click('#ctl00_ContentPlaceHolder1_btnBuscar'),
       ]);
 
+      // Debug: log URL y título después del submit
+      this.logger.log(`URL después de submit: ${page.url()}`);
+      this.logger.log(`Título: ${await page.title()}`);
+
+      // Debug: verificar si hay contenido de resultado
+      const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 500));
+      this.logger.log(`Contenido (primeros 500 chars): ${bodyText}`);
+
       // 5. Parsear respuesta
       const result = await this.parseResponse(page);
 
