@@ -165,16 +165,6 @@ export class SbsScraperService implements OnModuleDestroy {
   }
 
   private async parseResponse(page: Page): Promise<ConsultaAfpResponseDto> {
-    // Verificar si hay mensaje de error
-    const errorElement = await page.$('.error, .mensaje-error');
-    if (errorElement) {
-      const errorText = await errorElement.textContent();
-      return ConsultaAfpResponseDto.noAfiliado(
-        errorText?.trim() || 'Error desconocido',
-      );
-    }
-
-    // Verificar si está afiliado buscando el texto característico
     const pageContent = await page.content();
 
     // Caso: No afiliado al SPP
@@ -182,45 +172,37 @@ export class SbsScraperService implements OnModuleDestroy {
       pageContent.includes('no se encuentra afiliado') ||
       pageContent.includes('No se encontró información')
     ) {
-      const mensajeElement = await page.$('td, .mensaje');
-      const mensaje = mensajeElement
-        ? await mensajeElement.textContent()
-        : 'No se encuentra afiliado al Sistema Privado de Pensiones';
-
-      return ConsultaAfpResponseDto.noAfiliado(mensaje?.trim() || '');
+      return ConsultaAfpResponseDto.noAfiliado(
+        'No se encuentra afiliado al Sistema Privado de Pensiones',
+      );
     }
 
-    // Caso: Afiliado - extraer datos
+    // Caso: Afiliado - extraer datos usando JavaScript en la página
     try {
-      // Buscar AFP
-      const afpCell = await page.$('td:has-text("Actualmente se encuentra afiliado(a) a") + td');
-      const afp = afpCell ? (await afpCell.textContent())?.trim() : null;
+      const data = await page.evaluate(() => {
+        const getText = (searchText: string): string | null => {
+          const cells = document.querySelectorAll('td');
+          for (let i = 0; i < cells.length; i++) {
+            if (cells[i].textContent?.includes(searchText)) {
+              const nextCell = cells[i].nextElementSibling as HTMLElement;
+              return nextCell?.textContent?.trim() || null;
+            }
+          }
+          return null;
+        };
 
-      // Buscar CUSPP
-      const cusppCell = await page.$('td:has-text("Su Código de Identificación del SPP es") + td');
-      const cuspp = cusppCell ? (await cusppCell.textContent())?.trim() : null;
+        return {
+          afp: getText('Actualmente se encuentra afiliado(a) a'),
+          cuspp: getText('Su Código de Identificación del SPP es'),
+          fechaAfiliacion: getText('Se encuentra afiliado(a) al SPP desde el'),
+          situacion: getText('Su situación actual es'),
+          ultimoAporte: getText('La fecha de devengue de su último aporte es'),
+        };
+      });
 
-      // Buscar fecha de afiliación
-      const fechaCell = await page.$('td:has-text("Se encuentra afiliado(a) al SPP desde el") + td');
-      const fechaAfiliacion = fechaCell
-        ? (await fechaCell.textContent())?.trim()
-        : null;
-
-      // Buscar situación
-      const situacionCell = await page.$('td:has-text("Su situación actual es") + td');
-      const situacion = situacionCell
-        ? (await situacionCell.textContent())?.trim()
-        : null;
-
-      // Buscar último aporte
-      const aporteCell = await page.$('td:has-text("La fecha de devengue de su último aporte es") + td');
-      const ultimoAporte = aporteCell
-        ? (await aporteCell.textContent())?.trim()
-        : null;
-
-      if (!afp || !cuspp) {
-        // Si no encontramos los datos esperados, puede que el formato haya cambiado
+      if (!data.afp || !data.cuspp) {
         this.logger.warn('No se pudieron extraer todos los datos. Verificar formato de página.');
+        this.logger.warn(`Datos extraídos: ${JSON.stringify(data)}`);
 
         return ConsultaAfpResponseDto.noAfiliado(
           'No se pudo interpretar la respuesta de la SBS',
@@ -228,11 +210,11 @@ export class SbsScraperService implements OnModuleDestroy {
       }
 
       return ConsultaAfpResponseDto.afiliado({
-        afp,
-        cuspp,
-        fechaAfiliacion: fechaAfiliacion || 'No disponible',
-        situacion: situacion || 'No disponible',
-        ultimoAporte: ultimoAporte || null,
+        afp: data.afp,
+        cuspp: data.cuspp,
+        fechaAfiliacion: data.fechaAfiliacion || 'No disponible',
+        situacion: data.situacion || 'No disponible',
+        ultimoAporte: data.ultimoAporte || null,
       });
     } catch (error) {
       this.logger.error(`Error parseando respuesta: ${error.message}`);
