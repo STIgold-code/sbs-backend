@@ -6,11 +6,16 @@ WORKDIR /app
 # Copiar package files
 COPY package*.json ./
 
-# Instalar dependencias
-RUN npm ci --only=production
+# Instalar TODAS las dependencias (incluyendo dev para compilar)
+RUN npm ci
 
-# Copiar código compilado
-COPY dist ./dist
+# Copiar código fuente
+COPY tsconfig.json ./
+COPY nest-cli.json ./
+COPY src ./src
+
+# Compilar
+RUN npm run build
 
 # Variables de entorno
 ENV NODE_ENV=production
