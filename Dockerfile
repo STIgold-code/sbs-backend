@@ -1,5 +1,5 @@
 # Usar imagen con Playwright preinstalado
-FROM mcr.microsoft.com/playwright:v1.41.0-jammy
+FROM mcr.microsoft.com/playwright:v1.50.0-jammy
 
 WORKDIR /app
 
